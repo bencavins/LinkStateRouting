@@ -1,12 +1,15 @@
 /*
  * routed_LS.h
  *
- *  Created on: Nov 2, 2013
+ *  Created on: 2013-11-02
  *      Author: Ben Cavins
  */
 
 #ifndef ROUTED_LS_H_
 #define ROUTED_LS_H_
+
+#include <stdlib.h>
+#include <stdio.h>
 
 
 

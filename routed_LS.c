@@ -1,11 +1,10 @@
 /*
  * routed_LS.c
  *
- *  Created on: Nov 2, 2013
+ *  Created on: 2013-11-02
  *      Author: Ben Cavins
  */
 
-#include <stdio.h>
 #include "routed_LS.h"
 
 int main(void) {
