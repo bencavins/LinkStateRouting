@@ -11,6 +11,8 @@
 #include <stdlib.h>
 #include <stdio.h>
 
+#define USAGE "<router ID> <log file name> <initialization file>"
+#define ARG_MIN 3
 
 
 #endif /* ROUTED_LS_H_ */
