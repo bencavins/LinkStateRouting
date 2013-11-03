@@ -16,18 +16,28 @@
 
 
 void init_router(FILE* fp, char *router_id) {
-	char *line = NULL;
-	size_t len = 0;
-	ssize_t read;
+
+	char *line = NULL;  // Current line
+	size_t len = 0;     // Buffer length
+	ssize_t read;       // Bytes read
+	char *str;          // Current string
+
+	// Read line in file
 	while ((read = getline(&line, &len, fp)) != -1) {
-		printf("%s", line);
-		char *str;
+
+		// Parse for router ID
 		str = strtok(line, " ,<>\n");
-		printf("%s\n", str);
-		while ((str = strtok(NULL, " ,<>\n")) != NULL) {
-			printf("%s\n", str);
+
+		// Only parse line fully if direct neighbor of router ID
+		if (strncmp(str, router_id, MAX_ID_LEN) == 0) {
+			while ((str = strtok(NULL, " ,<>\n")) != NULL) {
+				printf("%s\n", str);
+			}
 		}
 	}
+
+	// Free memory
+	free(line);
 }
 
 
