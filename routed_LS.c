@@ -5,7 +5,31 @@
  *      Author: Ben Cavins
  */
 
-#include "routed_LS.h"
+#include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
+
+#define USAGE "<router ID> <log file name> <initialization file>"
+#define ARG_MIN 3
+#define MAX_ID_LEN 24
+#define MAX_PORT_LEN 16
+
+
+void init_router(FILE* fp, char *router_id) {
+	char *line = NULL;
+	size_t len = 0;
+	ssize_t read;
+	while ((read = getline(&line, &len, fp)) != -1) {
+		printf("%s", line);
+		char *str;
+		str = strtok(line, " ,<>\n");
+		printf("%s\n", str);
+		while ((str = strtok(NULL, " ,<>\n")) != NULL) {
+			printf("%s\n", str);
+		}
+	}
+}
+
 
 int main(int argc, char *argv[]) {
 
@@ -44,6 +68,8 @@ int main(int argc, char *argv[]) {
 		perror("fopen");
 		return EXIT_FAILURE;
 	}
+
+	init_router(initfp, router_id);
 
 	// Close initialization file
 	if (fclose(initfp) != 0) {

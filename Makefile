@@ -6,7 +6,7 @@ all: routed_LS
 routed_LS: routed_LS.o
 	$(CC) $(FLAGS) $^ -o $@
 
-routed_LS.o: routed_LS.c routed_LS.h
+routed_LS.o: routed_LS.c
 	$(CC) $(FLAGS) -c $< 
 
 clean:
