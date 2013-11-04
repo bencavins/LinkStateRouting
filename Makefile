@@ -12,3 +12,6 @@ routed_LS.o: routed_LS.c
 clean:
 	rm -f routed_LS
 	rm -f *.o
+	rm -f *~
+	rm -f A-log.txt
+	rm -f B-log.txt

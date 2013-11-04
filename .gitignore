@@ -8,5 +8,8 @@
 # Executables
 routed_LS
 
-# Log file
-log.txt
+# Log files
+*-log.txt
+
+# Emacs backups
+*~
