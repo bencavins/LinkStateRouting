@@ -13,6 +13,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <unistd.h>
 
 #define USAGE "<router ID> <log file name> <initialization file>"
 #define ARG_MIN 3
@@ -56,7 +57,6 @@ int main(int argc, char *argv[]) {
 	struct sockaddr_in local_addr;
 	struct sockaddr_in remote_addr;
 	int sock;
-	int port;
 
 	// Check arguments
 	if (argc < ARG_MIN) {
@@ -90,22 +90,32 @@ int main(int argc, char *argv[]) {
 
 	// Is this A or B?
 	if (strcmp("A", router_id) == 0) {
-		port = 9601;
 
-		// Populate remote_addr with address data
+		// Populate local_addr with address data
 		memset(&local_addr, '\0', sizeof(local_addr));
 		local_addr.sin_family = AF_INET;
-		local_addr.sin_port = htons(port);
+		local_addr.sin_port = htons(9601);
 		local_addr.sin_addr.s_addr = INADDR_ANY;
+
+		// Populate remote_addr with address data
+		memset(&remote_addr, '\0', sizeof(remote_addr));
+		remote_addr.sin_family = AF_INET;
+		remote_addr.sin_port = htons(9604);
+		remote_addr.sin_addr.s_addr = inet_addr("127.0.0.1");
 
 	} else {
-		port = 9604;
 
-		// Populate remote_addr with address data
+		// Populate local_addr with address data
 		memset(&local_addr, '\0', sizeof(local_addr));
 		local_addr.sin_family = AF_INET;
-		local_addr.sin_port = htons(port);
+		local_addr.sin_port = htons(9604);
 		local_addr.sin_addr.s_addr = INADDR_ANY;
+
+		// Populate remote_addr with address data
+		memset(&remote_addr, '\0', sizeof(remote_addr));
+		remote_addr.sin_family = AF_INET;
+		remote_addr.sin_port = htons(9601);
+		remote_addr.sin_addr.s_addr = inet_addr("127.0.0.1");
 	}
 
 	// Create socket
@@ -120,9 +130,10 @@ int main(int argc, char *argv[]) {
 		return EXIT_FAILURE;
 	}
 
-	// If A, listen. If B, connect
-	if (strcmp(("A"), router_id) == 0) {
+	// Try to connect
+	if (connect(sock, (struct sockaddr *) &remote_addr, sizeof(remote_addr)) < 0) {
 
+		// If connect fails, listen instead
 		if (listen(sock, 10) != 0) {
 			perror("listen");
 			return EXIT_FAILURE;
@@ -130,50 +141,36 @@ int main(int argc, char *argv[]) {
 
 		socklen_t addr_size = sizeof(remote_addr);
 		int new_sock = accept(sock, (struct sockaddr *) &remote_addr, &addr_size);
-
-		char fromb[32];
-		if (recv(new_sock, fromb, 32, 0) < 0) {
-			perror("recv");
-			return EXIT_FAILURE;
-		}
-
-		printf("A: %s\n", fromb);
-
-		char msg[] = "Hello from A!";
-
-		if (send(new_sock, msg, sizeof(msg), 0) < 0) {
-			perror("send");
-			return EXIT_FAILURE;
-		}
-
-	} else {
-
-		memset(&remote_addr, '\0', sizeof(remote_addr));
-		remote_addr.sin_family = AF_INET;
-		remote_addr.sin_port = htons(9601);
-		remote_addr.sin_addr.s_addr = inet_addr("127.0.0.1");
-
-		if (connect(sock, (struct sockaddr *) &remote_addr, sizeof(remote_addr)) < 0) {
-			perror("connect");
-			return EXIT_FAILURE;
-		}
-
-		char msg[] = "Hello from B!";
-		if (send(sock, msg, sizeof(msg), 0) < 0) {
-			perror("send");
-			return EXIT_FAILURE;
-		}
-
-		char froma[32];
-		if (recv(sock, froma, 32, 0) < 0) {
-			perror("recv");
-			return EXIT_FAILURE;
-		}
-
-		printf("B: %s\n", froma);
+		sock = new_sock;
 	}
 
+	// Create a message
+	char msg[32];
+	snprintf(msg, 32, "Hello from %s!", router_id);
+
+	// Send the message
+	if (send(sock, msg, 32, 0) < 0) {
+		perror("send");
+		return EXIT_FAILURE;
+	}
+
+	// Receive a message
+	char from_msg[32];
+	if (recv(sock, from_msg, 32, 0) < 0) {
+		perror("recv");
+		return EXIT_FAILURE;
+	}
+
+	// Print the received message
+	printf("%s: %s\n", router_id, from_msg);
+
 	//init_router(initfp, router_id);
+
+	// Close socket
+	if (close(sock) < 0) {
+		perror("close");
+		return EXIT_FAILURE;
+	}
 
 	// Close initialization file
 	if (fclose(initfp) != 0) {
