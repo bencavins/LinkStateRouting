@@ -5,6 +5,11 @@
  *      Author: Ben Cavins
  */
 
+#include <sys/socket.h>
+#include <sys/types.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <netdb.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -48,6 +53,10 @@ int main(int argc, char *argv[]) {
 	char *init_filename;
 	FILE *logfp;
 	FILE *initfp;
+	struct sockaddr_in local_addr;
+	struct sockaddr_in remote_addr;
+	int sock;
+	int port;
 
 	// Check arguments
 	if (argc < ARG_MIN) {
@@ -79,7 +88,92 @@ int main(int argc, char *argv[]) {
 		return EXIT_FAILURE;
 	}
 
-	init_router(initfp, router_id);
+	// Is this A or B?
+	if (strcmp("A", router_id) == 0) {
+		port = 9601;
+
+		// Populate remote_addr with address data
+		memset(&local_addr, '\0', sizeof(local_addr));
+		local_addr.sin_family = AF_INET;
+		local_addr.sin_port = htons(port);
+		local_addr.sin_addr.s_addr = INADDR_ANY;
+
+	} else {
+		port = 9604;
+
+		// Populate remote_addr with address data
+		memset(&local_addr, '\0', sizeof(local_addr));
+		local_addr.sin_family = AF_INET;
+		local_addr.sin_port = htons(port);
+		local_addr.sin_addr.s_addr = INADDR_ANY;
+	}
+
+	// Create socket
+	if ((sock = socket(PF_INET, SOCK_STREAM, 0)) < 0) {
+		perror("socket");
+		return EXIT_FAILURE;
+	}
+
+	// Bind socket to port
+	if (bind(sock, (struct sockaddr *) &local_addr, sizeof(local_addr)) < 0) {
+		perror("bind");
+		return EXIT_FAILURE;
+	}
+
+	// If A, listen. If B, connect
+	if (strcmp(("A"), router_id) == 0) {
+
+		if (listen(sock, 10) != 0) {
+			perror("listen");
+			return EXIT_FAILURE;
+		}
+
+		socklen_t addr_size = sizeof(remote_addr);
+		int new_sock = accept(sock, (struct sockaddr *) &remote_addr, &addr_size);
+
+		char fromb[32];
+		if (recv(new_sock, fromb, 32, 0) < 0) {
+			perror("recv");
+			return EXIT_FAILURE;
+		}
+
+		printf("A: %s\n", fromb);
+
+		char msg[] = "Hello from A!";
+
+		if (send(new_sock, msg, sizeof(msg), 0) < 0) {
+			perror("send");
+			return EXIT_FAILURE;
+		}
+
+	} else {
+
+		memset(&remote_addr, '\0', sizeof(remote_addr));
+		remote_addr.sin_family = AF_INET;
+		remote_addr.sin_port = htons(9601);
+		remote_addr.sin_addr.s_addr = inet_addr("127.0.0.1");
+
+		if (connect(sock, (struct sockaddr *) &remote_addr, sizeof(remote_addr)) < 0) {
+			perror("connect");
+			return EXIT_FAILURE;
+		}
+
+		char msg[] = "Hello from B!";
+		if (send(sock, msg, sizeof(msg), 0) < 0) {
+			perror("send");
+			return EXIT_FAILURE;
+		}
+
+		char froma[32];
+		if (recv(sock, froma, 32, 0) < 0) {
+			perror("recv");
+			return EXIT_FAILURE;
+		}
+
+		printf("B: %s\n", froma);
+	}
+
+	//init_router(initfp, router_id);
 
 	// Close initialization file
 	if (fclose(initfp) != 0) {
