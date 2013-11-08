@@ -21,8 +21,15 @@
 #define MAX_ID_LEN 24
 #define MAX_PORT_LEN 16
 
+typedef struct {
+	char dest_id[MAX_ID_LEN];
+	unsigned int cost;
+	unsigned int out_port;
+	unsigned int dest_port;
+} table_entry_t;
 
-void init_router(FILE* fp, char *router_id) {
+
+void init_router(FILE* fp, char *router_id, vector_p neighbors) {
 
 	char *line = NULL;  // Current line
 	size_t len = 0;     // Buffer length
@@ -37,8 +44,18 @@ void init_router(FILE* fp, char *router_id) {
 
 		// Only parse line fully if direct neighbor of router ID
 		if (strncmp(str, router_id, MAX_ID_LEN) == 0) {
-			while ((str = strtok(NULL, " ,<>\n")) != NULL) {
-				printf("%s\n", str);
+			char *port1 = strtok(NULL, " ,<>\n");
+			char *node  = strtok(NULL, " ,<>\n");
+			char *port2 = strtok(NULL, " ,<>\n");
+			char *cost  = strtok(NULL, " ,<>\n");
+
+			if (port1 != NULL && node != NULL && port2 != NULL && cost != NULL) {
+				table_entry_t entry;
+				strncpy(entry.dest_id, node, MAX_ID_LEN);
+				entry.out_port = atoi(port1);
+				entry.dest_port = atoi(port2);
+				entry.cost = atoi(cost);
+				vector_add(neighbors, &entry, sizeof(entry));
 			}
 		}
 	}
@@ -58,7 +75,7 @@ int main(int argc, char *argv[]) {
 	struct sockaddr_in local_addr;
 	struct sockaddr_in remote_addr;
 	int sock;
-
+	vector_p neighbors;
 
 	// Check arguments
 	if (argc < ARG_MIN) {
@@ -88,6 +105,18 @@ int main(int argc, char *argv[]) {
 		fprintf(stderr, "Error opening file: %s\n", log_filename);
 		perror("fopen");
 		return EXIT_FAILURE;
+	}
+
+	// Initialize data structures
+	neighbors = create_vector();
+
+	// Initialize router
+	init_router(initfp, router_id, neighbors);
+
+	unsigned int i;
+	for (i = 0; i < neighbors->length; ++i) {
+		table_entry_t *entry = vector_get(neighbors, i);
+		printf("node %s: out port = %d, dest port = %d, cost = %d\n", entry->dest_id, entry->out_port, entry->dest_port, entry->cost);
 	}
 
 	// Is this A or B?
@@ -166,13 +195,14 @@ int main(int argc, char *argv[]) {
 	// Print the received message
 	printf("%s: %s\n", router_id, from_msg);
 
-	//init_router(initfp, router_id);
-
 	// Close socket
 	if (close(sock) < 0) {
 		perror("close");
 		return EXIT_FAILURE;
 	}
+
+	// Destroy data structures
+	destroy_vector(neighbors);
 
 	// Close initialization file
 	if (fclose(initfp) != 0) {
