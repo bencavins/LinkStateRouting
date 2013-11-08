@@ -3,11 +3,14 @@ FLAGS = -g -Wall -Wextra -O2
 
 all: routed_LS
 
-routed_LS: routed_LS.o
+routed_LS: routed_LS.o vector.o
 	$(CC) $(FLAGS) $^ -o $@
 
-routed_LS.o: routed_LS.c
+routed_LS.o: routed_LS.c 
 	$(CC) $(FLAGS) -c $< 
+
+vector.o: vector.c vector.h
+	$(CC) $(FLAGS) -c $<
 
 clean:
 	rm -f routed_LS
