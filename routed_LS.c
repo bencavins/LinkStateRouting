@@ -14,6 +14,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
+#include "vector.h"
 
 #define USAGE "<router ID> <log file name> <initialization file>"
 #define ARG_MIN 3
@@ -57,6 +58,7 @@ int main(int argc, char *argv[]) {
 	struct sockaddr_in local_addr;
 	struct sockaddr_in remote_addr;
 	int sock;
+
 
 	// Check arguments
 	if (argc < ARG_MIN) {
