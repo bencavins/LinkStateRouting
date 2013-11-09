@@ -5,7 +5,7 @@
 vector.c and vector.h were copied from https://github.com/zhemao/libds 
 
 The code was modified to remove compiler warnings about signed / unsigned 
-integer comparison.
+integer comparison and a bug was fixed in vector_insert.
 
 It is distributed under the MIT licence, a copy of which is reproduced below:
 
