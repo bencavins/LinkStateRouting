@@ -4,16 +4,8 @@
 
 vector.* and hashmap.* were copied from https://github.com/zhemao/libds 
 
-This code was modified in the following ways:
-
-vector.c:
-  - Modified to remove compiler warnings about signed/unsigned integer 
-  	comparison.
-  - Fixed bug in vector_insert.
-  
-hashmap.c:
-  - Modified to remove compiler warnings about signed/unsigned integer 
-  	comparison.
+The code has been modified slightly to remove compiler warnings about signed/
+unsigned integer comparison.
 
 This code is distributed under the MIT licence, a copy of which is reproduced
 below:
