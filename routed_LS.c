@@ -48,6 +48,7 @@ typedef struct {
 	lsp_entry_t data[MAX_LSP_ENTRIES];
 } lsp_packet_t;
 
+char *global_id;
 
 void init_router(FILE* fp, char *router_id, vector_p neighbors) {
 
@@ -166,10 +167,16 @@ lsp_header_t build_header(int seq_num, char *src_id, int flags, int length, int 
 }
 
 void log_lsp(FILE *fp, lsp_packet_t *packet) {
-	fprintf(fp, "%s\n", packet->data[0].id);
+	int i;
+	fprintf(fp, "ID | COST\n");
+	fprintf(fp, "---------\n");
 	fflush(fp);
+	for (i = 0; i < packet->header.entries; ++i) {
+		lsp_entry_t entry = packet->data[i];
+		fprintf(fp, "%s  | %4d\n", entry.id, entry.cost);
+		fflush(fp);
+	}
 }
-
 
 int main(int argc, char *argv[]) {
 
@@ -193,6 +200,8 @@ int main(int argc, char *argv[]) {
 	log_filename = argv[2];
 	init_filename = argv[3];
 
+	global_id = router_id;
+
 	// Open initialization file
 	if ((initfp = fopen(init_filename, "r")) == NULL) {
 		fprintf(stderr, "Error opening file: %s\n", init_filename);
@@ -215,17 +224,17 @@ int main(int argc, char *argv[]) {
 
 	unsigned int i;
 	for (i = 0; i < neighbors->length; ++i) {
-		table_entry_t *entry = vector_get(neighbors, i);
-		printf("node %s: out port = %d, dest port = %d, cost = %d\n", entry->dest_id, entry->out_port, entry->dest_port, entry->cost);
+		//table_entry_t *entry = vector_get(neighbors, i);
+		//printf("node %s: out port = %d, dest port = %d, cost = %d\n", entry->dest_id, entry->out_port, entry->dest_port, entry->cost);
 	}
 
 	build_routing_table(socks, neighbors);
 
-	for (i = 0; i < neighbors->length; ++i) {
-		table_entry_t *entry = vector_get(neighbors, i);
-		int *val = hashmap_get(socks, entry->dest_id);
-		printf("%s: %s=%d\n", router_id, entry->dest_id, *val);
-	}
+//	for (i = 0; i < neighbors->length; ++i) {
+//		table_entry_t *entry = vector_get(neighbors, i);
+//		int *val = hashmap_get(socks, entry->dest_id);
+//		printf("%s: %s=%d\n", router_id, entry->dest_id, *val);
+//	}
 
 	// Create LSP
 	lsp_packet_t packet;
