@@ -48,8 +48,6 @@ typedef struct {
 	lsp_entry_t data[MAX_LSP_ENTRIES];
 } lsp_packet_t;
 
-char *global_id;
-
 void init_router(FILE* fp, char *router_id, vector_p neighbors) {
 
 	char *line = NULL;  // Current line
@@ -188,6 +186,7 @@ int main(int argc, char *argv[]) {
 	vector_p neighbors;
 	hashmap_p socks;  // Maps router IDs to socket FDs
 	int sequence_num = 0;
+	unsigned int i;
 
 	// Check arguments
 	if (argc < ARG_MIN) {
@@ -199,8 +198,6 @@ int main(int argc, char *argv[]) {
 	router_id = argv[1];
 	log_filename = argv[2];
 	init_filename = argv[3];
-
-	global_id = router_id;
 
 	// Open initialization file
 	if ((initfp = fopen(init_filename, "r")) == NULL) {
@@ -222,19 +219,7 @@ int main(int argc, char *argv[]) {
 
 	init_router(initfp, router_id, neighbors);
 
-	unsigned int i;
-	for (i = 0; i < neighbors->length; ++i) {
-		//table_entry_t *entry = vector_get(neighbors, i);
-		//printf("node %s: out port = %d, dest port = %d, cost = %d\n", entry->dest_id, entry->out_port, entry->dest_port, entry->cost);
-	}
-
 	build_routing_table(socks, neighbors);
-
-//	for (i = 0; i < neighbors->length; ++i) {
-//		table_entry_t *entry = vector_get(neighbors, i);
-//		int *val = hashmap_get(socks, entry->dest_id);
-//		printf("%s: %s=%d\n", router_id, entry->dest_id, *val);
-//	}
 
 	// Create LSP
 	lsp_packet_t packet;
