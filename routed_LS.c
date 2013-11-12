@@ -36,6 +36,7 @@ typedef struct {
 	int flags;
 	int length;
 	int entries;
+	int ttl;
 } lsp_header_t;
 
 typedef struct {
@@ -83,7 +84,7 @@ void init_router(FILE* fp, char *router_id, vector_p neighbors) {
 	free(line);
 }
 
-void build_routing_table(hashmap_p map, vector_p neighbors) {
+void build_socks_map(hashmap_p map, vector_p neighbors) {
 	struct sockaddr_in local_addr;
 	struct sockaddr_in remote_addr;
 	vector_p listening;
@@ -154,14 +155,34 @@ void build_routing_table(hashmap_p map, vector_p neighbors) {
 	destroy_vector(listening);
 }
 
-lsp_header_t build_header(int seq_num, char *src_id, int flags, int length, int entries) {
+lsp_header_t build_header(int seq_num, char *src_id, int flags, int length, int entries, int ttl) {
 	lsp_header_t header;
 	header.seq_num = seq_num;
 	strncpy(header.src_id, src_id, MAX_ID_LEN);
 	header.flags = flags;
 	header.length = length;
 	header.entries = entries;
+	header.ttl = ttl;
 	return header;
+}
+
+/* Returns 1 if table contains id, 0 otherwise */
+int table_contains(vector_p table, char *id) {
+	unsigned int i;
+	for (i = 0; i < table->length; ++i) {
+		table_entry_t *entry = vector_get(table, i);
+		if (strncmp(id, entry->dest_id, MAX_ID_LEN) == 0) {
+			return 1;
+		}
+	}
+	return 0;
+}
+
+void update_routing_table(vector_p table, lsp_packet_t *packet) {
+	unsigned int i;
+	if (!table_contains(table, packet->header.src_id)) {
+		return;
+	}
 }
 
 void log_lsp(FILE *fp, lsp_packet_t *packet) {
@@ -183,7 +204,7 @@ int main(int argc, char *argv[]) {
 	char *init_filename;
 	FILE *logfp;
 	FILE *initfp;
-	vector_p neighbors;
+	vector_p routing_table;
 	hashmap_p socks;  // Maps router IDs to socket FDs
 	int sequence_num = 0;
 	unsigned int i;
@@ -214,19 +235,19 @@ int main(int argc, char *argv[]) {
 	}
 
 	// Initialize data structures
-	neighbors = create_vector();
+	routing_table = create_vector();
 	socks = create_hashmap();
 
-	init_router(initfp, router_id, neighbors);
+	init_router(initfp, router_id, routing_table);
 
-	build_routing_table(socks, neighbors);
+	build_socks_map(socks, routing_table);
 
 	// Create LSP
 	lsp_packet_t packet;
 	int entries = 0;
 
-	for (i = 0; i < neighbors->length; ++i) {
-		table_entry_t *entry = vector_get(neighbors, i);
+	for (i = 0; i < routing_table->length; ++i) {
+		table_entry_t *entry = vector_get(routing_table, i);
 
 		lsp_entry_t lsp_entry;
 		strncpy(lsp_entry.id, entry->dest_id, MAX_ID_LEN);
@@ -238,12 +259,12 @@ int main(int argc, char *argv[]) {
 	}
 
 	int len = sizeof(lsp_header_t) + (sizeof(lsp_entry_t) * entries);
-	packet.header = build_header(sequence_num, router_id, 0, len, entries);
+	packet.header = build_header(sequence_num, router_id, 0, len, entries, 1);
 
 	log_lsp(logfp, &packet);
 
 	// Destroy data structures
-	destroy_vector(neighbors);
+	destroy_vector(routing_table);
 	destroy_hashmap(socks);
 
 	// Close initialization file
