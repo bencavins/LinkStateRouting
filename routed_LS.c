@@ -14,6 +14,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
+#include <time.h>
 #include "vector.h"
 #include "hashmap.h"
 
@@ -243,6 +244,7 @@ void log_lsp(FILE *fp, lsp_packet_t *packet) {
 
 void log_table(FILE *fp, vector_p table) {
 	unsigned int i;
+	fprintf(fp, "TIME = %ld\n", time(NULL));
 	fprintf(fp, " ID | COST | OUT PORT | DEST PORT \n");
 	fprintf(fp, "----------------------------------\n");
 	for (i = 0; i < table->length; ++i) {
@@ -264,6 +266,8 @@ int main(int argc, char *argv[]) {
 	vector_p routing_table;
 	hashmap_p socks;  // Maps router IDs to socket FDs
 	int sequence_num = 0;
+	time_t old_time;
+	time_t new_time;
 	unsigned int i;
 
 	// Check arguments
@@ -297,8 +301,8 @@ int main(int argc, char *argv[]) {
 	socks = create_hashmap();
 
 	init_router(initfp, router_id, neighbors, routing_table);
-
 	build_socks_map(socks, neighbors);
+	old_time = new_time = time(NULL);
 
 	// Create LSP
 	lsp_packet_t packet;
@@ -318,8 +322,8 @@ int main(int argc, char *argv[]) {
 
 	int len = sizeof(lsp_header_t) + (sizeof(lsp_entry_t) * entries);
 	packet.header = build_header(sequence_num, router_id, 0, len, entries, 1);
+	++sequence_num;
 
-	//log_lsp(logfp, &packet);
 	log_table(logfp, routing_table);
 
 	for (i = 0; i < neighbors->length; ++i) {
@@ -340,10 +344,7 @@ int main(int argc, char *argv[]) {
 		} else {
 			printf("%s: received from %s\n", router_id, new_packet.header.src_id);
 		}
-		//log_lsp(logfp, &new_packet);
-		printf("%s: BEFORE tablesize=%d\n", router_id, routing_table->length);
 		update_routing_table(routing_table, &new_packet, router_id);
-		printf("%s: AFTER  tablesize=%d\n", router_id, routing_table->length);
 		log_table(logfp, routing_table);
 	}
 
