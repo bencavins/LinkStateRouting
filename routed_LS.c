@@ -179,10 +179,52 @@ int table_contains(vector_p table, char *id) {
 	return 0;
 }
 
-void update_routing_table(vector_p table, lsp_packet_t *packet) {
-	//unsigned int i;
+table_entry_t* table_get_by_id(vector_p table, char *id) {
+	unsigned int i;
+	for (i = 0; i < table->length; ++i) {
+		table_entry_t *entry = vector_get(table, i);
+		if (strncmp(entry->dest_id, id, MAX_ID_LEN) == 0) {
+			return entry;
+		}
+	}
+	return NULL;
+}
+
+void update_routing_table(vector_p table, lsp_packet_t *packet, char *id) {
+	int i;
+	int index;
+	int c;
+	int out_port;
+	int dest_port;
+	table_entry_t *entry;
+	table_entry_t new_entry;
 	if (!table_contains(table, packet->header.src_id)) {
 		return;
+	}
+	entry = table_get_by_id(table, packet->header.src_id);
+	c = entry->cost;
+	out_port = entry->out_port;
+	dest_port = entry->dest_port;
+	for (i = 0; i < packet->header.entries; ++i) {
+		new_entry.cost = packet->data[i].cost + c;
+		strncpy(new_entry.dest_id, packet->data[i].id, MAX_ID_LEN);
+		new_entry.out_port = out_port;
+		new_entry.dest_port = dest_port;
+		if (strncmp(new_entry.dest_id, id, MAX_ID_LEN) != 0) {
+			if (!table_contains(table, packet->data[i].id)) {
+				vector_add(table, &new_entry, sizeof(table_entry_t));
+			} else {
+				entry = table_get_by_id(table, packet->data[i].id);
+				if (new_entry.cost < entry->cost) {
+					index = vector_index(table, entry, sizeof(table_entry_t));
+					vector_remove(table, index);
+					//vector_insert(table, &new_entry, sizeof(table_entry_t));
+					vector_insert(table, index, &new_entry, sizeof(table_entry_t));
+				} else {
+					// TODO check ids: A<B<C<D<E<F
+				}
+			}
+		}
 	}
 }
 
@@ -299,6 +341,10 @@ int main(int argc, char *argv[]) {
 			printf("%s: received from %s\n", router_id, new_packet.header.src_id);
 		}
 		//log_lsp(logfp, &new_packet);
+		printf("%s: BEFORE tablesize=%d\n", router_id, routing_table->length);
+		update_routing_table(routing_table, &new_packet, router_id);
+		printf("%s: AFTER  tablesize=%d\n", router_id, routing_table->length);
+		log_table(logfp, routing_table);
 	}
 
 	// Destroy data structures
