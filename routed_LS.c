@@ -49,7 +49,7 @@ typedef struct {
 	lsp_entry_t data[MAX_LSP_ENTRIES];
 } lsp_packet_t;
 
-void init_router(FILE* fp, char *router_id, vector_p neighbors) {
+void init_router(FILE* fp, char *router_id, vector_p neighbors, vector_p table) {
 
 	char *line = NULL;  // Current line
 	size_t len = 0;     // Buffer length
@@ -76,6 +76,7 @@ void init_router(FILE* fp, char *router_id, vector_p neighbors) {
 				entry.dest_port = atoi(port2);
 				entry.cost = atoi(cost);
 				vector_add(neighbors, &entry, sizeof(entry));
+				vector_add(table, &entry, sizeof(entry));
 			}
 		}
 	}
@@ -179,7 +180,7 @@ int table_contains(vector_p table, char *id) {
 }
 
 void update_routing_table(vector_p table, lsp_packet_t *packet) {
-	unsigned int i;
+	//unsigned int i;
 	if (!table_contains(table, packet->header.src_id)) {
 		return;
 	}
@@ -198,6 +199,18 @@ void log_lsp(FILE *fp, lsp_packet_t *packet) {
 	fflush(fp);
 }
 
+void log_table(FILE *fp, vector_p table) {
+	unsigned int i;
+	fprintf(fp, " ID | COST | OUT PORT | DEST PORT \n");
+	fprintf(fp, "----------------------------------\n");
+	for (i = 0; i < table->length; ++i) {
+		table_entry_t *entry = vector_get(table, i);
+		fprintf(fp, "  %s | %4d | %8d | %9d \n", entry->dest_id, entry->cost, entry->out_port, entry->dest_port);
+	}
+	fprintf(fp, "\n");
+	fflush(fp);
+}
+
 int main(int argc, char *argv[]) {
 
 	char *router_id;
@@ -206,6 +219,7 @@ int main(int argc, char *argv[]) {
 	FILE *logfp;
 	FILE *initfp;
 	vector_p neighbors;
+	vector_p routing_table;
 	hashmap_p socks;  // Maps router IDs to socket FDs
 	int sequence_num = 0;
 	unsigned int i;
@@ -237,9 +251,10 @@ int main(int argc, char *argv[]) {
 
 	// Initialize data structures
 	neighbors = create_vector();
+	routing_table = create_vector();
 	socks = create_hashmap();
 
-	init_router(initfp, router_id, neighbors);
+	init_router(initfp, router_id, neighbors, routing_table);
 
 	build_socks_map(socks, neighbors);
 
@@ -262,7 +277,8 @@ int main(int argc, char *argv[]) {
 	int len = sizeof(lsp_header_t) + (sizeof(lsp_entry_t) * entries);
 	packet.header = build_header(sequence_num, router_id, 0, len, entries, 1);
 
-	log_lsp(logfp, &packet);
+	//log_lsp(logfp, &packet);
+	log_table(logfp, routing_table);
 
 	for (i = 0; i < neighbors->length; ++i) {
 		table_entry_t *entry = vector_get(neighbors, i);
@@ -282,11 +298,12 @@ int main(int argc, char *argv[]) {
 		} else {
 			printf("%s: received from %s\n", router_id, new_packet.header.src_id);
 		}
-		log_lsp(logfp, &new_packet);
+		//log_lsp(logfp, &new_packet);
 	}
 
 	// Destroy data structures
 	destroy_vector(neighbors);
+	destroy_vector(routing_table);
 	destroy_hashmap(socks);
 
 	// Close initialization file
