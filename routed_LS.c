@@ -187,14 +187,15 @@ void update_routing_table(vector_p table, lsp_packet_t *packet) {
 
 void log_lsp(FILE *fp, lsp_packet_t *packet) {
 	int i;
+	fprintf(fp, "Source: %s\n", packet->header.src_id);
 	fprintf(fp, "ID | COST\n");
 	fprintf(fp, "---------\n");
-	fflush(fp);
 	for (i = 0; i < packet->header.entries; ++i) {
 		lsp_entry_t entry = packet->data[i];
 		fprintf(fp, "%s  | %4d\n", entry.id, entry.cost);
-		fflush(fp);
 	}
+	fprintf(fp, "\n");
+	fflush(fp);
 }
 
 int main(int argc, char *argv[]) {
@@ -204,7 +205,7 @@ int main(int argc, char *argv[]) {
 	char *init_filename;
 	FILE *logfp;
 	FILE *initfp;
-	vector_p routing_table;
+	vector_p neighbors;
 	hashmap_p socks;  // Maps router IDs to socket FDs
 	int sequence_num = 0;
 	unsigned int i;
@@ -235,19 +236,19 @@ int main(int argc, char *argv[]) {
 	}
 
 	// Initialize data structures
-	routing_table = create_vector();
+	neighbors = create_vector();
 	socks = create_hashmap();
 
-	init_router(initfp, router_id, routing_table);
+	init_router(initfp, router_id, neighbors);
 
-	build_socks_map(socks, routing_table);
+	build_socks_map(socks, neighbors);
 
 	// Create LSP
 	lsp_packet_t packet;
 	int entries = 0;
 
-	for (i = 0; i < routing_table->length; ++i) {
-		table_entry_t *entry = vector_get(routing_table, i);
+	for (i = 0; i < neighbors->length; ++i) {
+		table_entry_t *entry = vector_get(neighbors, i);
 
 		lsp_entry_t lsp_entry;
 		strncpy(lsp_entry.id, entry->dest_id, MAX_ID_LEN);
@@ -263,8 +264,29 @@ int main(int argc, char *argv[]) {
 
 	log_lsp(logfp, &packet);
 
+	for (i = 0; i < neighbors->length; ++i) {
+		table_entry_t *entry = vector_get(neighbors, i);
+		int *sock = hashmap_get(socks, entry->dest_id);
+		if (send(*sock, &packet, sizeof(packet), 0) < 0) {
+			perror("send");
+		}
+	}
+
+	for (i = 0; i < neighbors->length; ++i) {
+		table_entry_t *entry = vector_get(neighbors, i);
+		int *sock = hashmap_get(socks, entry->dest_id);
+		lsp_packet_t new_packet;
+		memset(&new_packet, '\0', sizeof(new_packet));
+		if (recv(*sock, &new_packet, sizeof(new_packet), 0) < 0) {
+			perror("recv");
+		} else {
+			printf("%s: received from %s\n", router_id, new_packet.header.src_id);
+		}
+		log_lsp(logfp, &new_packet);
+	}
+
 	// Destroy data structures
-	destroy_vector(routing_table);
+	destroy_vector(neighbors);
 	destroy_hashmap(socks);
 
 	// Close initialization file
