@@ -21,6 +21,7 @@
 #define ARG_MIN 3
 #define MAX_ID_LEN 24
 #define MAX_PORT_LEN 16
+#define MAX_LSP_ENTRIES 64
 
 typedef struct {
 	char dest_id[MAX_ID_LEN];
@@ -28,6 +29,24 @@ typedef struct {
 	unsigned int out_port;
 	unsigned int dest_port;
 } table_entry_t;
+
+typedef struct {
+	int seq_num;
+	char src_id[MAX_ID_LEN];
+	int flags;
+	int length;
+	int entries;
+} lsp_header_t;
+
+typedef struct {
+	char id[MAX_ID_LEN];
+	int cost;
+} lsp_entry_t;
+
+typedef struct {
+	lsp_header_t header;
+	lsp_entry_t data[MAX_LSP_ENTRIES];
+} lsp_packet_t;
 
 
 void init_router(FILE* fp, char *router_id, vector_p neighbors) {
@@ -65,7 +84,7 @@ void init_router(FILE* fp, char *router_id, vector_p neighbors) {
 	free(line);
 }
 
-void create_sockets_map(hashmap_p map, vector_p neighbors) {
+void build_routing_table(hashmap_p map, vector_p neighbors) {
 	struct sockaddr_in local_addr;
 	struct sockaddr_in remote_addr;
 	vector_p listening;
@@ -136,6 +155,21 @@ void create_sockets_map(hashmap_p map, vector_p neighbors) {
 	destroy_vector(listening);
 }
 
+lsp_header_t build_header(int seq_num, char *src_id, int flags, int length, int entries) {
+	lsp_header_t header;
+	header.seq_num = seq_num;
+	strncpy(header.src_id, src_id, MAX_ID_LEN);
+	header.flags = flags;
+	header.length = length;
+	header.entries = entries;
+	return header;
+}
+
+void log_lsp(FILE *fp, lsp_packet_t *packet) {
+	fprintf(fp, "%s\n", packet->data[0].id);
+	fflush(fp);
+}
+
 
 int main(int argc, char *argv[]) {
 
@@ -146,6 +180,7 @@ int main(int argc, char *argv[]) {
 	FILE *initfp;
 	vector_p neighbors;
 	hashmap_p socks;  // Maps router IDs to socket FDs
+	int sequence_num = 0;
 
 	// Check arguments
 	if (argc < ARG_MIN) {
@@ -184,14 +219,34 @@ int main(int argc, char *argv[]) {
 		printf("node %s: out port = %d, dest port = %d, cost = %d\n", entry->dest_id, entry->out_port, entry->dest_port, entry->cost);
 	}
 
-	create_sockets_map(socks, neighbors);
+	build_routing_table(socks, neighbors);
 
-	//printf("map size = %d\n", (int) socks->num_buckets);
 	for (i = 0; i < neighbors->length; ++i) {
 		table_entry_t *entry = vector_get(neighbors, i);
 		int *val = hashmap_get(socks, entry->dest_id);
 		printf("%s: %s=%d\n", router_id, entry->dest_id, *val);
 	}
+
+	// Create LSP
+	lsp_packet_t packet;
+	int entries = 0;
+
+	for (i = 0; i < neighbors->length; ++i) {
+		table_entry_t *entry = vector_get(neighbors, i);
+
+		lsp_entry_t lsp_entry;
+		strncpy(lsp_entry.id, entry->dest_id, MAX_ID_LEN);
+		lsp_entry.cost = entry->cost;
+
+		packet.data[i] = lsp_entry;
+
+		++entries;
+	}
+
+	int len = sizeof(lsp_header_t) + (sizeof(lsp_entry_t) * entries);
+	packet.header = build_header(sequence_num, router_id, 0, len, entries);
+
+	log_lsp(logfp, &packet);
 
 	// Destroy data structures
 	destroy_vector(neighbors);
