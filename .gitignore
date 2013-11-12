@@ -13,3 +13,9 @@ routed_LS
 
 # Emacs backups
 *~
+
+# Duplicate init file (for debugging)
+other-init.txt
+
+#Duplicate start script (for debugging)
+other_start_routers.sh
