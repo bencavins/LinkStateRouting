@@ -19,3 +19,5 @@ other-init.txt
 
 #Duplicate start script (for debugging)
 other_start_routers.sh
+other_start_routers.cpy.sh
+start_routers.cpy.sh
