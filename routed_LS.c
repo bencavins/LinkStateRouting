@@ -14,7 +14,9 @@
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
+#include <fcntl.h>
 #include <time.h>
+#include <errno.h>
 #include "vector.h"
 #include "hashmap.h"
 
@@ -141,6 +143,9 @@ void build_socks_map(hashmap_p map, vector_p neighbors) {
 
 			// This this socket as listening
 			vector_add(listening, &pair, sizeof(struct tuple));
+		} else {
+			// Set socket as non-blocking
+			fcntl(sock, F_SETFL, O_NONBLOCK);
 		}
 
 		// Create mapping
@@ -151,6 +156,7 @@ void build_socks_map(hashmap_p map, vector_p neighbors) {
 	for (i = 0; i < listening->length; ++i) {
 		struct tuple *item = vector_get(listening, i);
 		int new_sock = accept(item->sock, NULL, NULL);
+		fcntl(new_sock, F_SETFL, O_NONBLOCK);
 		hashmap_put(map, item->id, &new_sock, sizeof(int));
 	}
 
@@ -218,9 +224,10 @@ void update_routing_table(vector_p table, lsp_packet_t *packet, char *id) {
 				entry = table_get_by_id(table, packet->data[i].id);
 				if (new_entry.cost < entry->cost) {
 					index = vector_index(table, entry, sizeof(table_entry_t));
-					vector_remove(table, index);
+					vector_set(table, index, &new_entry, sizeof(table_entry_t));
+					//vector_remove(table, index);
 					//vector_insert(table, &new_entry, sizeof(table_entry_t));
-					vector_insert(table, index, &new_entry, sizeof(table_entry_t));
+					//vector_insert(table, index, &new_entry, sizeof(table_entry_t));
 				} else {
 					// TODO check ids: A<B<C<D<E<F
 				}
@@ -264,6 +271,7 @@ int main(int argc, char *argv[]) {
 	FILE *initfp;
 	vector_p neighbors;
 	vector_p routing_table;
+	hashmap_p recvd_packets;
 	hashmap_p socks;  // Maps router IDs to socket FDs
 	int sequence_num = 0;
 	time_t old_time;
@@ -298,11 +306,11 @@ int main(int argc, char *argv[]) {
 	// Initialize data structures
 	neighbors = create_vector();
 	routing_table = create_vector();
+	recvd_packets = create_hashmap();
 	socks = create_hashmap();
 
 	init_router(initfp, router_id, neighbors, routing_table);
 	build_socks_map(socks, neighbors);
-	old_time = new_time = time(NULL);
 
 	// Create LSP
 	lsp_packet_t packet;
@@ -334,23 +342,47 @@ int main(int argc, char *argv[]) {
 		}
 	}
 
-	for (i = 0; i < neighbors->length; ++i) {
-		table_entry_t *entry = vector_get(neighbors, i);
-		int *sock = hashmap_get(socks, entry->dest_id);
-		lsp_packet_t new_packet;
-		memset(&new_packet, '\0', sizeof(new_packet));
-		if (recv(*sock, &new_packet, sizeof(new_packet), 0) < 0) {
-			perror("recv");
-		} else {
-			printf("%s: received from %s\n", router_id, new_packet.header.src_id);
+	old_time = new_time = time(NULL);
+
+	while (new_time <= old_time + 5) {
+
+		new_time = time(NULL);
+
+		for (i = 0; i < neighbors->length; ++i) {
+			table_entry_t *entry = vector_get(neighbors, i);
+			int *sock = hashmap_get(socks, entry->dest_id);
+			lsp_packet_t new_packet;
+			memset(&new_packet, '\0', sizeof(new_packet));
+			int retval = recv(*sock, &new_packet, sizeof(new_packet), O_NONBLOCK);
+			if (retval < 0) {
+				if (errno == EAGAIN || errno == EWOULDBLOCK) {
+					//printf("%s: no data\n", router_id);
+				} else {
+					perror("recv");
+				}
+			} else if (retval > 0) {
+				int *entry = hashmap_get(recvd_packets, new_packet.header.src_id);
+				if (entry == NULL) {
+					printf("%s: received from %s\n", router_id, new_packet.header.src_id);
+					hashmap_put(recvd_packets, new_packet.header.src_id, &(new_packet.header.seq_num), sizeof(int));
+					update_routing_table(routing_table, &new_packet, router_id);
+					log_table(logfp, routing_table);
+				} else {
+					if (*entry < new_packet.header.seq_num) {
+						printf("%s: received from %s\n", router_id, new_packet.header.src_id);
+						hashmap_put(recvd_packets, new_packet.header.src_id, &(new_packet.header.seq_num), sizeof(int));
+						update_routing_table(routing_table, &new_packet, router_id);
+						log_table(logfp, routing_table);
+					}
+				}
+			}
 		}
-		update_routing_table(routing_table, &new_packet, router_id);
-		log_table(logfp, routing_table);
 	}
 
 	// Destroy data structures
 	destroy_vector(neighbors);
 	destroy_vector(routing_table);
+	destroy_hashmap(recvd_packets);
 	destroy_hashmap(socks);
 
 	// Close initialization file
