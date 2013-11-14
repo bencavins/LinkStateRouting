@@ -362,18 +362,11 @@ int main(int argc, char *argv[]) {
 				}
 			} else if (retval > 0) {
 				int *entry = hashmap_get(recvd_packets, new_packet.header.src_id);
-				if (entry == NULL) {
+				if (entry == NULL || *entry < new_packet.header.seq_num) {
 					printf("%s: received from %s\n", router_id, new_packet.header.src_id);
 					hashmap_put(recvd_packets, new_packet.header.src_id, &(new_packet.header.seq_num), sizeof(int));
 					update_routing_table(routing_table, &new_packet, router_id);
 					log_table(logfp, routing_table);
-				} else {
-					if (*entry < new_packet.header.seq_num) {
-						printf("%s: received from %s\n", router_id, new_packet.header.src_id);
-						hashmap_put(recvd_packets, new_packet.header.src_id, &(new_packet.header.seq_num), sizeof(int));
-						update_routing_table(routing_table, &new_packet, router_id);
-						log_table(logfp, routing_table);
-					}
 				}
 			}
 		}
