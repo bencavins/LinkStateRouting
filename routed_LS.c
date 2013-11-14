@@ -7,6 +7,7 @@
 
 #include <sys/socket.h>
 #include <sys/types.h>
+#include <sys/time.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <netdb.h>
@@ -25,6 +26,7 @@
 #define MAX_ID_LEN 24
 #define MAX_PORT_LEN 16
 #define MAX_LSP_ENTRIES 64
+#define TTL 6
 
 typedef struct {
 	char dest_id[MAX_ID_LEN];
@@ -225,9 +227,6 @@ void update_routing_table(vector_p table, lsp_packet_t *packet, char *id) {
 				if (new_entry.cost < entry->cost) {
 					index = vector_index(table, entry, sizeof(table_entry_t));
 					vector_set(table, index, &new_entry, sizeof(table_entry_t));
-					//vector_remove(table, index);
-					//vector_insert(table, &new_entry, sizeof(table_entry_t));
-					//vector_insert(table, index, &new_entry, sizeof(table_entry_t));
 				} else {
 					// TODO check ids: A<B<C<D<E<F
 				}
@@ -329,7 +328,7 @@ int main(int argc, char *argv[]) {
 	}
 
 	int len = sizeof(lsp_header_t) + (sizeof(lsp_entry_t) * entries);
-	packet.header = build_header(sequence_num, router_id, 0, len, entries, 1);
+	packet.header = build_header(sequence_num, router_id, 0, len, entries, TTL);
 	++sequence_num;
 
 	log_table(logfp, routing_table);
@@ -344,7 +343,7 @@ int main(int argc, char *argv[]) {
 
 	old_time = new_time = time(NULL);
 
-	while (new_time <= old_time + 5) {
+	while (1/*new_time <= old_time + 5*/) {
 
 		new_time = time(NULL);
 
@@ -367,6 +366,33 @@ int main(int argc, char *argv[]) {
 					hashmap_put(recvd_packets, new_packet.header.src_id, &(new_packet.header.seq_num), sizeof(int));
 					update_routing_table(routing_table, &new_packet, router_id);
 					log_table(logfp, routing_table);
+				}
+			}
+			// TODO decrement ttl
+			// TODO forward on all links except the one it came from if ttl is > 0
+		}
+
+		// TODO check stdin for input
+		fd_set fdset;
+		struct timeval tv;
+		int retval;
+		FD_ZERO(&fdset);
+		FD_SET(fileno(stdin), &fdset);
+		tv.tv_sec = 0;
+		tv.tv_usec = 1;
+		retval = select(1, &fdset, NULL, NULL, &tv);
+		if (retval < 0) {
+			perror("select");
+		} else if (retval == 0) {
+			// No data in stdin
+		} else {
+			if (FD_ISSET(fileno(stdin), &fdset)) {
+				char cmd[32];
+				int bytes = read(fileno(stdin), cmd, sizeof(cmd));
+				//printf("%s: bytes read from stdin = %d\n", router_id, (int) bytes);
+				if (strncmp(cmd, "exit", 4) == 0) {
+					printf("%s: exiting...\n", router_id);
+					break;
 				}
 			}
 		}
