@@ -355,7 +355,7 @@ int main(int argc, char *argv[]) {
 //			perror("send");
 //		}
 //	}
-	sendall(neighbors, socks, &packet, NULL);
+	//sendall(neighbors, socks, &packet, NULL);
 
 	old_time = new_time = time(NULL);
 
@@ -364,6 +364,14 @@ int main(int argc, char *argv[]) {
 	while (!done) {
 
 		new_time = time(NULL);
+
+		if (new_time >= old_time + 5) {
+			old_time = new_time;
+			printf("%s: sending...\n", router_id);
+			sequence_num++;
+			packet.header.seq_num = sequence_num;
+			sendall(neighbors, socks, &packet, NULL);
+		}
 
 		for (i = 0; i < neighbors->length; ++i) {
 			table_entry_t *entry = vector_get(neighbors, i);
@@ -397,6 +405,7 @@ int main(int argc, char *argv[]) {
 					} else {  // Regular packet
 						hashmap_put(recvd_packets, new_packet.header.src_id, &(new_packet.header.seq_num), sizeof(int));
 						update_routing_table(routing_table, &new_packet, router_id);
+						log_lsp(logfp, &new_packet);
 						log_table(logfp, routing_table);
 						new_packet.header.ttl--;
 						if (new_packet.header.ttl > 0) {
