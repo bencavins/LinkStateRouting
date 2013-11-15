@@ -262,6 +262,19 @@ void log_table(FILE *fp, vector_p table) {
 	fflush(fp);
 }
 
+void sendall(vector_p neighbors, hashmap_p socks, lsp_packet_t *packet, char *ignore_id) {
+	unsigned int i;
+	for (i = 0; i < neighbors->length; ++i) {
+		table_entry_t *entry = vector_get(neighbors, i);
+		if (ignore_id == NULL || strncmp(entry->dest_id, ignore_id, MAX_ID_LEN) != 0) {
+			int *sock = hashmap_get(socks, entry->dest_id);
+			if (send(*sock, packet, sizeof(lsp_packet_t), 0) < 0) {
+				perror("send");
+			}
+		}
+	}
+}
+
 int main(int argc, char *argv[]) {
 
 	char *router_id;
@@ -334,13 +347,14 @@ int main(int argc, char *argv[]) {
 
 	log_table(logfp, routing_table);
 
-	for (i = 0; i < neighbors->length; ++i) {
-		table_entry_t *entry = vector_get(neighbors, i);
-		int *sock = hashmap_get(socks, entry->dest_id);
-		if (send(*sock, &packet, sizeof(packet), 0) < 0) {
-			perror("send");
-		}
-	}
+//	for (i = 0; i < neighbors->length; ++i) {
+//		table_entry_t *entry = vector_get(neighbors, i);
+//		int *sock = hashmap_get(socks, entry->dest_id);
+//		if (send(*sock, &packet, sizeof(packet), 0) < 0) {
+//			perror("send");
+//		}
+//	}
+	sendall(neighbors, socks, &packet, NULL);
 
 	old_time = new_time = time(NULL);
 
