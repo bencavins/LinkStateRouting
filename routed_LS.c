@@ -27,6 +27,7 @@
 #define MAX_PORT_LEN 16
 #define MAX_LSP_ENTRIES 64
 #define TTL 6
+#define FLAG_KILL 1
 
 typedef struct {
 	char dest_id[MAX_ID_LEN];
@@ -343,7 +344,9 @@ int main(int argc, char *argv[]) {
 
 	old_time = new_time = time(NULL);
 
-	while (1/*new_time <= old_time + 5*/) {
+	int done = 0;
+
+	while (!done) {
 
 		new_time = time(NULL);
 
@@ -362,7 +365,11 @@ int main(int argc, char *argv[]) {
 			} else if (retval > 0) {
 				int *entry = hashmap_get(recvd_packets, new_packet.header.src_id);
 				if (entry == NULL || *entry < new_packet.header.seq_num) {
-					printf("%s: received from %s\n", router_id, new_packet.header.src_id);
+					fprintf(logfp, "%s: received from %s\n", router_id, new_packet.header.src_id);
+					if (new_packet.header.flags & FLAG_KILL) {
+						fprintf(logfp, "%s: kill packet received\n", router_id);
+						done = 1;
+					}
 					hashmap_put(recvd_packets, new_packet.header.src_id, &(new_packet.header.seq_num), sizeof(int));
 					update_routing_table(routing_table, &new_packet, router_id);
 					log_table(logfp, routing_table);
@@ -388,11 +395,27 @@ int main(int argc, char *argv[]) {
 		} else {
 			if (FD_ISSET(fileno(stdin), &fdset)) {
 				char cmd[32];
-				int bytes = read(fileno(stdin), cmd, sizeof(cmd));
+				//int bytes = read(fileno(stdin), cmd, sizeof(cmd));
+				if (read(fileno(stdin), cmd, sizeof(cmd)) < 0) {
+					perror("read");
+				}
 				//printf("%s: bytes read from stdin = %d\n", router_id, (int) bytes);
 				if (strncmp(cmd, "exit", 4) == 0) {
+					lsp_packet_t kill_packet;
+					kill_packet.header = build_header(0, "X", FLAG_KILL, 0, 0, TTL);
+					for (i = 0; i < neighbors->length; ++i) {
+						table_entry_t *entry = vector_get(neighbors, i);
+						int *sock = hashmap_get(socks, entry->dest_id);
+						int bytes = send(*sock, &kill_packet, sizeof(kill_packet), 0);
+						if (bytes < 0) {
+							perror("send");
+						} else {
+							fprintf(logfp, "bytes = %d\n", bytes);
+						}
+					}
 					printf("%s: exiting...\n", router_id);
-					break;
+					//break;
+					done = 1;
 				}
 			}
 		}
