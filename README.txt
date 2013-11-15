@@ -1,4 +1,13 @@
 ==================================================
+  Starting the Routers
+==================================================
+
+There is currently a race condition in router startup where two or more routers
+listen on the same socket, causing deadlock. A delay should be added between
+starting up routers to keep this from happening, like the one second sleep
+in between startups in start_routers.sh .
+
+==================================================
   Borrowed Code
 ==================================================
 
