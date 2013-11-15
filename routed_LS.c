@@ -383,6 +383,13 @@ int main(int argc, char *argv[]) {
 					fprintf(logfp, "%s: received from %s\n", router_id, new_packet.header.src_id);
 					if (new_packet.header.flags & FLAG_KILL) {
 						fprintf(logfp, "%s: kill packet received\n", router_id);
+						char from[MAX_ID_LEN];
+						strncpy(from, new_packet.header.src_id, MAX_ID_LEN);
+						strncpy(new_packet.header.src_id, router_id, MAX_ID_LEN);
+						new_packet.header.ttl--;
+						if (new_packet.header.ttl > 0) {
+							sendall(neighbors, socks, &new_packet, from);
+						}
 						done = 1;
 					}
 					hashmap_put(recvd_packets, new_packet.header.src_id, &(new_packet.header.seq_num), sizeof(int));
