@@ -234,11 +234,10 @@ void update_routing_table(vector_p table, lsp_packet_t *packet, char *id) {
 
 				// Replace if cost is same and ID is less
 				} else if (new_entry.cost == entry->cost) {
-					if (new_entry.out_port < entry->out_port) {
+					if (new_entry.dest_port < entry->dest_port) {
 						index = vector_index(table, entry, sizeof(table_entry_t));
 						vector_set(table, index, &new_entry, sizeof(table_entry_t));
 					}
-					// TODO check ids: A<B<C<D<E<F
 				}
 			}
 		}
@@ -247,12 +246,14 @@ void update_routing_table(vector_p table, lsp_packet_t *packet, char *id) {
 
 void log_lsp(FILE *fp, lsp_packet_t *packet) {
 	int i;
-	fprintf(fp, "Source: %s\n", packet->header.src_id);
-	fprintf(fp, "ID | COST\n");
-	fprintf(fp, "---------\n");
+	fprintf(fp, "LSP\n");
+	fprintf(fp, "SOURCE: %s\n", packet->header.src_id);
+	fprintf(fp, "TIME: %ld\n", time(NULL));
+	fprintf(fp, " ID | COST\n");
+	fprintf(fp, "----------\n");
 	for (i = 0; i < packet->header.entries; ++i) {
 		lsp_entry_t entry = packet->data[i];
-		fprintf(fp, "%s  | %4d\n", entry.id, entry.cost);
+		fprintf(fp, " %s  | %4d\n", entry.id, entry.cost);
 	}
 	fprintf(fp, "\n");
 	fflush(fp);
@@ -260,6 +261,8 @@ void log_lsp(FILE *fp, lsp_packet_t *packet) {
 
 void log_table(FILE *fp, vector_p table) {
 	unsigned int i;
+	fprintf(fp, "==================================\n");
+	fprintf(fp, "ROUTING TABLE\n");
 	fprintf(fp, "TIME = %ld\n", time(NULL));
 	fprintf(fp, " ID | COST | OUT PORT | DEST PORT \n");
 	fprintf(fp, "----------------------------------\n");
@@ -267,7 +270,7 @@ void log_table(FILE *fp, vector_p table) {
 		table_entry_t *entry = vector_get(table, i);
 		fprintf(fp, "  %s | %4d | %8d | %9d \n", entry->dest_id, entry->cost, entry->out_port, entry->dest_port);
 	}
-	fprintf(fp, "\n");
+	fprintf(fp, "==================================\n\n");
 	fflush(fp);
 }
 
@@ -385,10 +388,9 @@ int main(int argc, char *argv[]) {
 			} else if (retval > 0) {
 				int *entry = hashmap_get(recvd_packets, new_packet.header.src_id);
 				if (entry == NULL || *entry < new_packet.header.seq_num) {
-					fprintf(logfp, "%s: received from %s\n", router_id, new_packet.header.src_id);
 
 					if (new_packet.header.flags & FLAG_KILL) {  // Kill packet
-						fprintf(logfp, "%s: kill packet received\n", router_id);
+						fprintf(logfp, "kill packet received\n");
 						log_lsp(logfp, &new_packet);
 						char from[MAX_ID_LEN];
 						strncpy(from, new_packet.header.src_id, MAX_ID_LEN);
@@ -398,6 +400,7 @@ int main(int argc, char *argv[]) {
 							sendall(neighbors, socks, &new_packet, from);
 						}
 						done = 1;
+						break;
 
 					} else {  // Regular packet
 						hashmap_put(recvd_packets, new_packet.header.src_id, &(new_packet.header.seq_num), sizeof(int));
@@ -406,7 +409,6 @@ int main(int argc, char *argv[]) {
 						log_table(logfp, routing_table);
 						new_packet.header.ttl--;
 						if (new_packet.header.ttl > 0) {
-							fprintf(logfp, "forwarding...\n");
 							sendall(neighbors, socks, &new_packet, new_packet.header.src_id);
 						}
 					}
