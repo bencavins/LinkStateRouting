@@ -226,10 +226,18 @@ void update_routing_table(vector_p table, lsp_packet_t *packet, char *id) {
 				vector_add(table, &new_entry, sizeof(table_entry_t));
 			} else {
 				entry = table_get_by_id(table, packet->data[i].id);
+
+				// Replace if cost is less
 				if (new_entry.cost < entry->cost) {
 					index = vector_index(table, entry, sizeof(table_entry_t));
 					vector_set(table, index, &new_entry, sizeof(table_entry_t));
-				} else {
+
+				// Replace if cost is same and ID is less
+				} else if (new_entry.cost == entry->cost) {
+					if (new_entry.out_port < entry->out_port) {
+						index = vector_index(table, entry, sizeof(table_entry_t));
+						vector_set(table, index, &new_entry, sizeof(table_entry_t));
+					}
 					// TODO check ids: A<B<C<D<E<F
 				}
 			}
