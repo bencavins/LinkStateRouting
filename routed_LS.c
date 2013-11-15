@@ -18,6 +18,7 @@
 #include <fcntl.h>
 #include <time.h>
 #include <errno.h>
+#include <limits.h>
 #include "vector.h"
 #include "hashmap.h"
 
@@ -416,17 +417,18 @@ int main(int argc, char *argv[]) {
 				//printf("%s: bytes read from stdin = %d\n", router_id, (int) bytes);
 				if (strncmp(cmd, "exit", 4) == 0) {
 					lsp_packet_t kill_packet;
-					kill_packet.header = build_header(0, "X", FLAG_KILL, 0, 0, TTL);
-					for (i = 0; i < neighbors->length; ++i) {
-						table_entry_t *entry = vector_get(neighbors, i);
-						int *sock = hashmap_get(socks, entry->dest_id);
-						int bytes = send(*sock, &kill_packet, sizeof(kill_packet), 0);
-						if (bytes < 0) {
-							perror("send");
-						} else {
-							fprintf(logfp, "bytes = %d\n", bytes);
-						}
-					}
+					kill_packet.header = build_header(INT_MAX, router_id, FLAG_KILL, 0, 0, TTL);
+					sendall(neighbors, socks, &kill_packet, NULL);
+//					for (i = 0; i < neighbors->length; ++i) {
+//						table_entry_t *entry = vector_get(neighbors, i);
+//						int *sock = hashmap_get(socks, entry->dest_id);
+//						int bytes = send(*sock, &kill_packet, sizeof(kill_packet), 0);
+//						if (bytes < 0) {
+//							perror("send");
+//						} else {
+//							fprintf(logfp, "bytes = %d\n", bytes);
+//						}
+//					}
 					printf("%s: exiting...\n", router_id);
 					//break;
 					done = 1;
