@@ -348,15 +348,6 @@ int main(int argc, char *argv[]) {
 
 	log_table(logfp, routing_table);
 
-//	for (i = 0; i < neighbors->length; ++i) {
-//		table_entry_t *entry = vector_get(neighbors, i);
-//		int *sock = hashmap_get(socks, entry->dest_id);
-//		if (send(*sock, &packet, sizeof(packet), 0) < 0) {
-//			perror("send");
-//		}
-//	}
-	//sendall(neighbors, socks, &packet, NULL);
-
 	old_time = new_time = time(NULL);
 
 	int done = 0;
@@ -380,9 +371,7 @@ int main(int argc, char *argv[]) {
 			memset(&new_packet, '\0', sizeof(new_packet));
 			int retval = recv(*sock, &new_packet, sizeof(new_packet), O_NONBLOCK);
 			if (retval < 0) {
-				if (errno == EAGAIN || errno == EWOULDBLOCK) {
-					//printf("%s: no data\n", router_id);
-				} else {
+				if (errno != EAGAIN && errno != EWOULDBLOCK) {
 					perror("recv");
 				}
 			} else if (retval > 0) {
@@ -409,7 +398,6 @@ int main(int argc, char *argv[]) {
 						log_table(logfp, routing_table);
 						new_packet.header.ttl--;
 						if (new_packet.header.ttl > 0) {
-							// TODO forward packet on all links except the one it came from
 							fprintf(logfp, "forwarding...\n");
 							sendall(neighbors, socks, &new_packet, new_packet.header.src_id);
 						}
@@ -428,32 +416,17 @@ int main(int argc, char *argv[]) {
 		retval = select(1, &fdset, NULL, NULL, &tv);
 		if (retval < 0) {
 			perror("select");
-		} else if (retval == 0) {
-			// No data in stdin
-		} else {
+		} else if (retval > 0) {
 			if (FD_ISSET(fileno(stdin), &fdset)) {
 				char cmd[32];
-				//int bytes = read(fileno(stdin), cmd, sizeof(cmd));
 				if (read(fileno(stdin), cmd, sizeof(cmd)) < 0) {
 					perror("read");
 				}
-				//printf("%s: bytes read from stdin = %d\n", router_id, (int) bytes);
 				if (strncmp(cmd, "exit", 4) == 0) {
 					lsp_packet_t kill_packet;
 					kill_packet.header = build_header(INT_MAX, router_id, FLAG_KILL, 0, 0, TTL);
 					sendall(neighbors, socks, &kill_packet, NULL);
-//					for (i = 0; i < neighbors->length; ++i) {
-//						table_entry_t *entry = vector_get(neighbors, i);
-//						int *sock = hashmap_get(socks, entry->dest_id);
-//						int bytes = send(*sock, &kill_packet, sizeof(kill_packet), 0);
-//						if (bytes < 0) {
-//							perror("send");
-//						} else {
-//							fprintf(logfp, "bytes = %d\n", bytes);
-//						}
-//					}
 					printf("%s: exiting...\n", router_id);
-					//break;
 					done = 1;
 				}
 			}
