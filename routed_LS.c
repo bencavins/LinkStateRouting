@@ -381,8 +381,10 @@ int main(int argc, char *argv[]) {
 				int *entry = hashmap_get(recvd_packets, new_packet.header.src_id);
 				if (entry == NULL || *entry < new_packet.header.seq_num) {
 					fprintf(logfp, "%s: received from %s\n", router_id, new_packet.header.src_id);
-					if (new_packet.header.flags & FLAG_KILL) {
+
+					if (new_packet.header.flags & FLAG_KILL) {  // Kill packet
 						fprintf(logfp, "%s: kill packet received\n", router_id);
+						log_lsp(logfp, &new_packet);
 						char from[MAX_ID_LEN];
 						strncpy(from, new_packet.header.src_id, MAX_ID_LEN);
 						strncpy(new_packet.header.src_id, router_id, MAX_ID_LEN);
@@ -391,17 +393,22 @@ int main(int argc, char *argv[]) {
 							sendall(neighbors, socks, &new_packet, from);
 						}
 						done = 1;
+
+					} else {  // Regular packet
+						hashmap_put(recvd_packets, new_packet.header.src_id, &(new_packet.header.seq_num), sizeof(int));
+						update_routing_table(routing_table, &new_packet, router_id);
+						log_table(logfp, routing_table);
+						new_packet.header.ttl--;
+						if (new_packet.header.ttl > 0) {
+							// TODO forward packet on all links except the one it came from
+							fprintf(logfp, "forwarding...\n");
+							sendall(neighbors, socks, &new_packet, new_packet.header.src_id);
+						}
 					}
-					hashmap_put(recvd_packets, new_packet.header.src_id, &(new_packet.header.seq_num), sizeof(int));
-					update_routing_table(routing_table, &new_packet, router_id);
-					log_table(logfp, routing_table);
 				}
 			}
-			// TODO decrement ttl
-			// TODO forward on all links except the one it came from if ttl is > 0
 		}
 
-		// TODO check stdin for input
 		fd_set fdset;
 		struct timeval tv;
 		int retval;
