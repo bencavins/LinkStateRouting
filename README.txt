@@ -116,5 +116,4 @@ deadlock. See "Starting Routers" above for more info.
 
   ^ ^
 =(O.O)=
- (^ ^)/
-  ^ ^
+ (u u)/
