@@ -201,7 +201,7 @@ table_entry_t* table_get_by_id(vector_p table, char *id) {
 	return NULL;
 }
 
-void update_routing_table(vector_p table, lsp_packet_t *packet, char *id) {
+int update_routing_table(vector_p table, lsp_packet_t *packet, char *id) {
 	int i;
 	int index;
 	int c;
@@ -209,8 +209,9 @@ void update_routing_table(vector_p table, lsp_packet_t *packet, char *id) {
 	int dest_port;
 	table_entry_t *entry;
 	table_entry_t new_entry;
+	int changed = 0;
 	if (!table_contains(table, packet->header.src_id)) {
-		return;
+		return 0;
 	}
 	entry = table_get_by_id(table, packet->header.src_id);
 	c = entry->cost;
@@ -224,6 +225,7 @@ void update_routing_table(vector_p table, lsp_packet_t *packet, char *id) {
 		if (strncmp(new_entry.dest_id, id, MAX_ID_LEN) != 0) {
 			if (!table_contains(table, packet->data[i].id)) {
 				vector_add(table, &new_entry, sizeof(table_entry_t));
+				changed = 1;
 			} else {
 				entry = table_get_by_id(table, packet->data[i].id);
 
@@ -231,17 +233,20 @@ void update_routing_table(vector_p table, lsp_packet_t *packet, char *id) {
 				if (new_entry.cost < entry->cost) {
 					index = vector_index(table, entry, sizeof(table_entry_t));
 					vector_set(table, index, &new_entry, sizeof(table_entry_t));
+					changed = 1;
 
 				// Replace if cost is same and ID is less
 				} else if (new_entry.cost == entry->cost) {
 					if (new_entry.dest_port < entry->dest_port) {
 						index = vector_index(table, entry, sizeof(table_entry_t));
 						vector_set(table, index, &new_entry, sizeof(table_entry_t));
+						changed = 1;
 					}
 				}
 			}
 		}
 	}
+	return changed;
 }
 
 void log_lsp(FILE *fp, lsp_packet_t *packet) {
@@ -404,9 +409,10 @@ int main(int argc, char *argv[]) {
 
 					} else {  // Regular packet
 						hashmap_put(recvd_packets, new_packet.header.src_id, &(new_packet.header.seq_num), sizeof(int));
-						update_routing_table(routing_table, &new_packet, router_id);
 						log_lsp(logfp, &new_packet);
-						log_table(logfp, routing_table);
+						if (update_routing_table(routing_table, &new_packet, router_id)) {
+							log_table(logfp, routing_table);
+						}
 						new_packet.header.ttl--;
 						if (new_packet.header.ttl > 0) {
 							sendall(neighbors, socks, &new_packet, new_packet.header.src_id);
